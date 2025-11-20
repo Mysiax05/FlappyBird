@@ -32,6 +32,7 @@
         max-width: 400px;
         height: auto;
 
+        /* blokuje domyślne gesty na telefonie */
         touch-action: none;
       }
     </style>
@@ -85,6 +86,9 @@
       const sndDie = loadSound("assets/Sound Efects/die.ogg");
       const sndSwoosh = loadSound("assets/Sound Efects/swoosh.ogg");
 
+      const bgMusic = loadSound("assets/Sound Efects/music.mp3");
+      bgMusic.loop = true;
+
       const gravity = 0.3;
       const flapStrength = -6;
       const pipeSpeed = 2;
@@ -99,6 +103,46 @@
       let frameCount = 0;
       let baseOffset = 0;
 
+      let restartButton = { x: 0, y: 0, w: 0, h: 0 };
+
+      const SCORE_KEY = "flappy_scores";
+
+      function saveScore(currentScore) {
+        let scores = [];
+        const stored = localStorage.getItem(SCORE_KEY);
+        if (stored) {
+          try {
+            scores = JSON.parse(stored);
+          } catch (e) {
+            scores = [];
+          }
+        }
+        scores.push(currentScore);
+        scores.sort(function (a, b) {
+          return b - a;
+        });
+        scores = scores.slice(0, 5);
+        localStorage.setItem(SCORE_KEY, JSON.stringify(scores));
+      }
+
+      function getBestScore() {
+        const scores = getScores();
+        if (scores.length === 0) return 0;
+        return scores[0];
+      }
+
+      function getScores() {
+        const stored = localStorage.getItem(SCORE_KEY);
+        if (!stored) return [];
+        try {
+          const scores = JSON.parse(stored);
+          if (Array.isArray(scores)) return scores;
+          return [];
+        } catch (e) {
+          return [];
+        }
+      }
+
       function resetGame() {
         bird = {
           x: 80,
@@ -106,6 +150,7 @@
           vy: 0,
           width: 34,
           height: 24,
+          angle: 0,
         };
 
         pipes = [];
@@ -131,49 +176,67 @@
         });
       }
 
-      function saveScore(currentScore) {
-        const key = "flappy_scores";
-        let scores = [];
-        const stored = localStorage.getItem(key);
-        if (stored) {
-          try {
-            scores = JSON.parse(stored);
-          } catch (e) {
-            scores = [];
-          }
-        }
-        scores.push(currentScore);
-        scores.sort(function (a, b) {
-          return b - a;
-        });
-        scores = scores.slice(0, 5);
-        localStorage.setItem(key, JSON.stringify(scores));
+      function startMusic() {
+        try {
+          bgMusic.currentTime = 0;
+          bgMusic.play();
+        } catch (e) {}
       }
 
-      function getBestScore() {
-        const key = "flappy_scores";
-        const stored = localStorage.getItem(key);
-        if (!stored) return 0;
+      function stopMusic() {
         try {
-          const scores = JSON.parse(stored);
-          if (scores.length === 0) return 0;
-          return scores[0];
-        } catch (e) {
-          return 0;
-        }
+          bgMusic.pause();
+          bgMusic.currentTime = 0;
+        } catch (e) {}
       }
 
       function flap() {
         if (gameState === "ready") {
           gameState = "running";
           sndSwoosh.play().catch(function () {});
+          startMusic();
         } else if (gameState === "running") {
           bird.vy = flapStrength;
           sndWing.play().catch(function () {});
         } else if (gameState === "over") {
-          gameState = "ready";
-          resetGame();
+          restartGame();
         }
+      }
+
+      function restartGame() {
+        stopMusic();
+        gameState = "ready";
+        resetGame();
+      }
+
+      function getCanvasPosFromMouseEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+          x: (e.clientX - rect.left) * scaleX,
+          y: (e.clientY - rect.top) * scaleY,
+        };
+      }
+
+      function getCanvasPosFromTouchEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0] || e.changedTouches[0];
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+          x: (touch.clientX - rect.left) * scaleX,
+          y: (touch.clientY - rect.top) * scaleY,
+        };
+      }
+
+      function isInsideRestartButton(x, y) {
+        return (
+          x >= restartButton.x &&
+          x <= restartButton.x + restartButton.w &&
+          y >= restartButton.y &&
+          y <= restartButton.y + restartButton.h
+        );
       }
 
       // klawiatura – PC
@@ -184,8 +247,15 @@
       });
 
       // kliknięcie – PC
-      canvas.addEventListener("click", function () {
-        flap();
+      canvas.addEventListener("click", function (e) {
+        if (gameState === "over") {
+          const pos = getCanvasPosFromMouseEvent(e);
+          if (isInsideRestartButton(pos.x, pos.y)) {
+            restartGame();
+          }
+        } else {
+          flap();
+        }
       });
 
       // DOTYK – telefon
@@ -193,7 +263,14 @@
         "touchstart",
         function (e) {
           e.preventDefault();
-          flap();
+          if (gameState === "over") {
+            const pos = getCanvasPosFromTouchEvent(e);
+            if (isInsideRestartButton(pos.x, pos.y)) {
+              restartGame();
+            }
+          } else {
+            flap();
+          }
         },
         { passive: false }
       );
@@ -207,7 +284,7 @@
       );
 
       function update() {
-        if (gameState === "running") {
+        if (gameState === "running" || gameState === "dying") {
           updatePhysics();
         }
 
@@ -216,15 +293,40 @@
         requestAnimationFrame(update);
       }
 
+      function startDying() {
+        if (gameState !== "running") return;
+        gameState = "dying";
+        sndHit.play().catch(function () {});
+        sndDie.play().catch(function () {});
+      }
+
+      function hitGameOver() {
+        if (gameState === "over") return;
+        stopMusic();
+        gameState = "over";
+        saveScore(score);
+      }
+
       function updatePhysics() {
         bird.vy += gravity;
         bird.y += bird.vy;
+
+        bird.angle = Math.max(-0.6, Math.min(0.8, bird.vy / 5));
 
         baseOffset -= pipeSpeed;
         if (baseImg.width > 0) {
           if (baseOffset <= -baseImg.width) {
             baseOffset = 0;
           }
+        }
+
+        if (gameState === "dying") {
+          const groundY = canvas.height - baseImg.height;
+          if (bird.y + bird.height >= groundY) {
+            bird.y = groundY - bird.height;
+            hitGameOver();
+          }
+          return;
         }
 
         for (let i = 0; i < pipes.length; i++) {
@@ -244,11 +346,11 @@
 
           if (bird.x + bird.width > p.x && bird.x < p.x + p.width) {
             if (bird.y < topPipeBottom) {
-              hitGameOver();
+              startDying();
               return;
             }
             if (bird.y + bird.height > bottomPipeTop) {
-              hitGameOver();
+              startDying();
               return;
             }
           }
@@ -260,19 +362,13 @@
           }
         }
 
-        if (
-          bird.y + bird.height >= canvas.height - baseImg.height ||
-          bird.y < 0
-        ) {
+        const groundY = canvas.height - baseImg.height;
+        if (bird.y + bird.height >= groundY) {
+          bird.y = groundY - bird.height;
+          startDying();
+        } else if (bird.y < 0) {
           hitGameOver();
         }
-      }
-
-      function hitGameOver() {
-        sndHit.play().catch(function () {});
-        sndDie.play().catch(function () {});
-        gameState = "over";
-        saveScore(score);
       }
 
       function drawBackground() {
@@ -322,12 +418,30 @@
         const frameIndex = Math.floor(frameCount / 10) % 3;
         const img = birdFrames[frameIndex];
 
+        ctx.save();
+        const centerX = bird.x + bird.width / 2;
+        const centerY = bird.y + bird.height / 2;
+        ctx.translate(centerX, centerY);
+        ctx.rotate(bird.angle || 0);
+
         if (img.complete && img.width > 0) {
-          ctx.drawImage(img, bird.x, bird.y, bird.width, bird.height);
+          ctx.drawImage(
+            img,
+            -bird.width / 2,
+            -bird.height / 2,
+            bird.width,
+            bird.height
+          );
         } else {
           ctx.fillStyle = "yellow";
-          ctx.fillRect(bird.x, bird.y, bird.width, bird.height);
+          ctx.fillRect(
+            -bird.width / 2,
+            -bird.height / 2,
+            bird.width,
+            bird.height
+          );
         }
+        ctx.restore();
       }
 
       function drawScore(scoreValue, centerX, y) {
@@ -405,21 +519,50 @@
           }
 
           const best = getBestScore();
-          drawScore(score, canvas.width / 2, canvas.height / 2 + 10);
+          drawScore(score, canvas.width - 40, 20);
 
           ctx.fillStyle = "#000";
           ctx.font = "18px Arial";
           ctx.fillText(
             "Najlepszy wynik: " + best,
             canvas.width / 2 - 90,
-            canvas.height / 2 + 60
+            canvas.height / 2 + 10
           );
 
+          const scores = getScores();
+          ctx.font = "16px Arial";
           ctx.fillText(
-            "Spacja / dotknięcie = zagraj ponownie",
-            40,
-            canvas.height - 60
+            "TOP 5 wyników:",
+            canvas.width / 2 - 70,
+            canvas.height / 2 + 40
           );
+          for (let i = 0; i < scores.length; i++) {
+            const line = i + 1 + ". " + scores[i];
+            ctx.fillText(
+              line,
+              canvas.width / 2 - 60,
+              canvas.height / 2 + 60 + i * 18
+            );
+          }
+
+          const btnWidth = 180;
+          const btnHeight = 40;
+          const btnX = canvas.width / 2 - btnWidth / 2;
+          const btnY = canvas.height / 2 + 60 + 5 * 18 + 20;
+
+          restartButton.x = btnX;
+          restartButton.y = btnY;
+          restartButton.w = btnWidth;
+          restartButton.h = btnHeight;
+
+          ctx.fillStyle = "#ffa500";
+          ctx.fillRect(btnX, btnY, btnWidth, btnHeight);
+          ctx.strokeStyle = "#000";
+          ctx.strokeRect(btnX, btnY, btnWidth, btnHeight);
+
+          ctx.fillStyle = "#000";
+          ctx.font = "18px Arial";
+          ctx.fillText("Zagraj ponownie", btnX + 20, btnY + 26);
         }
       }
 
@@ -429,8 +572,8 @@
         drawBase();
         drawBird();
 
-        if (gameState === "running") {
-          drawScore(score, canvas.width / 2, 40);
+        if (gameState === "running" || gameState === "dying") {
+          drawScore(score, canvas.width - 40, 20);
         }
 
         drawUI();
