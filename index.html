@@ -3,8 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <title>Flappy Bird - Lab 3</title>
-
-    <!-- ważne na telefonach: brak zoomu, brak „skakania” -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
@@ -29,12 +27,11 @@
         border: 2px solid #000;
         background: #70c5ce;
 
-        /* RESPONSYWNOŚĆ – dopasowanie do szerokości ekranu */
+        /* Responsywność */
         width: 100%;
         max-width: 400px;
         height: auto;
 
-        /* dodatkowo blokuje gesty przewijania/zoomu na nowszych przeglądarkach */
         touch-action: none;
       }
     </style>
@@ -49,7 +46,6 @@
       const canvas = document.getElementById("gameCanvas");
       const ctx = canvas.getContext("2d");
 
-      // ----- OBRAZKI -----
       const backgroundImg = new Image();
       backgroundImg.src = "assets/Flappy Bird/background-day.png";
 
@@ -70,7 +66,6 @@
       const gameOverImg = new Image();
       gameOverImg.src = "assets/UI/gameover.png";
 
-      // cyfry do wyniku
       const numberImgs = [];
       for (let i = 0; i <= 9; i++) {
         const img = new Image();
@@ -78,7 +73,6 @@
         numberImgs.push(img);
       }
 
-      // ----- DŹWIĘKI -----
       function loadSound(path) {
         const a = new Audio();
         a.src = path;
@@ -91,7 +85,6 @@
       const sndDie = loadSound("assets/Sound Efects/die.ogg");
       const sndSwoosh = loadSound("assets/Sound Efects/swoosh.ogg");
 
-      // ----- PARAMETRY GRY -----
       const gravity = 0.3;
       const flapStrength = -6;
       const pipeSpeed = 2;
@@ -101,12 +94,11 @@
       let bird;
       let pipes;
       let score;
-      let gameState = "ready"; // ready, running, over
+      let gameState = "ready";
 
-      let frameCount = 0; // do animacji ptaka
-      let baseOffset = 0; // przesuwające się podłoże
+      let frameCount = 0;
+      let baseOffset = 0;
 
-      // ----- INICJALIZACJA -----
       function resetGame() {
         bird = {
           x: 80,
@@ -120,7 +112,6 @@
         score = 0;
         baseOffset = 0;
 
-        // kilka startowych rur
         for (let i = 0; i < 3; i++) {
           addPipe(300 + i * 200);
         }
@@ -140,7 +131,6 @@
         });
       }
 
-      // ----- ZAPIS WYNIKU -----
       function saveScore(currentScore) {
         const key = "flappy_scores";
         let scores = [];
@@ -155,8 +145,8 @@
         scores.push(currentScore);
         scores.sort(function (a, b) {
           return b - a;
-        }); // malejąco
-        scores = scores.slice(0, 5); // top 5
+        });
+        scores = scores.slice(0, 5);
         localStorage.setItem(key, JSON.stringify(scores));
       }
 
@@ -173,7 +163,6 @@
         }
       }
 
-      // ----- OBSŁUGA WEJŚCIA -----
       function flap() {
         if (gameState === "ready") {
           gameState = "running";
@@ -182,7 +171,6 @@
           bird.vy = flapStrength;
           sndWing.play().catch(function () {});
         } else if (gameState === "over") {
-          // restart
           gameState = "ready";
           resetGame();
         }
@@ -200,17 +188,16 @@
         flap();
       });
 
-      // DOTYK – telefon / tablet (bez opóźnienia)
+      // DOTYK – telefon
       canvas.addEventListener(
         "touchstart",
         function (e) {
-          e.preventDefault(); // blokuje domyślne kliknięcia/scroll
+          e.preventDefault();
           flap();
         },
         { passive: false }
       );
 
-      // blokada przewijania podczas przesuwania palcem po canvasie
       canvas.addEventListener(
         "touchmove",
         function (e) {
@@ -219,7 +206,6 @@
         { passive: false }
       );
 
-      // ----- PĘTLA GŁÓWNA -----
       function update() {
         if (gameState === "running") {
           updatePhysics();
@@ -231,11 +217,9 @@
       }
 
       function updatePhysics() {
-        // fizyka ptaka
         bird.vy += gravity;
         bird.y += bird.vy;
 
-        // przesuwająca się ziemia
         baseOffset -= pipeSpeed;
         if (baseImg.width > 0) {
           if (baseOffset <= -baseImg.width) {
@@ -243,39 +227,32 @@
           }
         }
 
-        // ruch rur
         for (let i = 0; i < pipes.length; i++) {
           pipes[i].x -= pipeSpeed;
         }
 
-        // usuwanie i dodawanie rur
         if (pipes.length > 0 && pipes[0].x + pipeWidth < 0) {
           pipes.shift();
           addPipe(pipes[pipes.length - 1].x + 200);
         }
 
-        // kolizje i punkty
         for (let i = 0; i < pipes.length; i++) {
           const p = pipes[i];
 
           const topPipeBottom = p.gapY;
           const bottomPipeTop = p.gapY + gapHeight;
 
-          // kolizja w poziomie
           if (bird.x + bird.width > p.x && bird.x < p.x + p.width) {
-            // górna rura
             if (bird.y < topPipeBottom) {
               hitGameOver();
               return;
             }
-            // dolna rura
             if (bird.y + bird.height > bottomPipeTop) {
               hitGameOver();
               return;
             }
           }
 
-          // zaliczenie punktu
           if (!p.passed && bird.x > p.x + p.width) {
             p.passed = true;
             score++;
@@ -283,7 +260,6 @@
           }
         }
 
-        // ziemia / sufit
         if (
           bird.y + bird.height >= canvas.height - baseImg.height ||
           bird.y < 0
@@ -299,7 +275,6 @@
         saveScore(score);
       }
 
-      // ----- RYSOWANIE -----
       function drawBackground() {
         if (backgroundImg.complete && backgroundImg.width > 0) {
           ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
@@ -461,7 +436,6 @@
         drawUI();
       }
 
-      // start gry
       resetGame();
       update();
     </script>
