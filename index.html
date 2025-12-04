@@ -313,10 +313,12 @@
 
         bird.angle = Math.max(-0.6, Math.min(0.8, bird.vy / 5));
 
-        baseOffset -= pipeSpeed;
-        if (baseImg.width > 0) {
-          if (baseOffset <= -baseImg.width) {
-            baseOffset = 0;
+        if (gameState === "running") {
+          baseOffset -= pipeSpeed;
+          if (baseImg.width > 0) {
+            if (baseOffset <= -baseImg.width) {
+              baseOffset = 0;
+            }
           }
         }
 
@@ -405,7 +407,13 @@
           const bottomPipeHeight = canvas.height - bottomPipeY;
 
           if (pipeImg.complete && pipeImg.width > 0) {
-            ctx.drawImage(pipeImg, p.x, 0, p.width, topPipeHeight);
+            ctx.save();
+            const topPipeBottom = topPipeHeight;
+            ctx.translate(p.x + p.width / 2, topPipeBottom);
+            ctx.scale(1, -1);
+            ctx.drawImage(pipeImg, -p.width / 2, 0, p.width, topPipeHeight);
+            ctx.restore();
+
             ctx.drawImage(pipeImg, p.x, bottomPipeY, p.width, bottomPipeHeight);
           } else {
             ctx.fillRect(p.x, 0, p.width, topPipeHeight);
